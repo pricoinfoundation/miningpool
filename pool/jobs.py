@@ -36,6 +36,15 @@ EPOCH_LAG    = 64
 
 BOOTSTRAP_SEED = hashlib.sha256(b"Pricoin RandomX fixed seed v1").digest()
 
+# Same SeedKeyFromHash transform pricoind applies internally before
+# randomx_init_cache. We send the tagged value to miners so they can pass
+# job["seed_hash"] straight into their RandomX cache without applying the
+# tag themselves (matches the xmrig fork's contract).
+_CACHE_KEY_TAG = b"pricoin/randomx/cache-key/v1"
+
+def cache_key_from_seed(raw_seed: bytes) -> bytes:
+    return hashlib.sha256(_CACHE_KEY_TAG + raw_seed).digest()
+
 
 def compute_seed_height(height: int) -> int:
     if height < EPOCH_LAG:
@@ -207,7 +216,10 @@ class JobManager:
             "job_id":     str(base.template_id),
             "blob":       (blob_prefix + b"\x00\x00\x00\x00").hex(),
             "target":     target_to_compact_le_hex(share_target),
-            "seed_hash":  base.seed_hash.hex(),
+            # Tagged cache key — miner uses this directly as the RandomX
+            # cache key, no further hashing. Pool's internal rxshare
+            # verification still uses the raw seed and tags internally.
+            "seed_hash":  cache_key_from_seed(base.seed_hash).hex(),
             "height":     base.height,
             "algo":       "rx/pric",
         }

@@ -30,7 +30,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pool.jobs import JobManager, BOOTSTRAP_SEED, difficulty_to_target
+from pool.jobs import JobManager, BOOTSTRAP_SEED, cache_key_from_seed, difficulty_to_target
 from pool.payouts import PayoutDaemon
 from pool.rpc import PricoinRPC
 from pool.stratum import StratumServer
@@ -256,7 +256,9 @@ async def _run_e2e(rpc, jobs, db_path, pool_port, seed_hash, miner_login):
                 assert int(job["height"]) > 0
                 assert len(bytes.fromhex(job["seed_hash"])) == 32
                 assert len(bytes.fromhex(job["blob"])) == 80
-                assert bytes.fromhex(job["seed_hash"]) == seed_hash
+                # As of phase 5.4 the pool sends the tagged cache key
+                # (so xmrig can use it directly), not the raw seed.
+                assert bytes.fromhex(job["seed_hash"]) == cache_key_from_seed(seed_hash)
 
                 # Mine + submit one share. On regtest the chain target
                 # ≈ 2^255 is *looser* than our share target (2^256/1024
