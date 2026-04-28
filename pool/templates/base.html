@@ -1,25 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ POOL_NAME }}{% block title %}{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ POOL_NAME }}{% block title %}{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">{{ POOL_NAME }}</a>
+
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a class="brand" href="/">
+      <img src="{{ url_for('static', filename='pricoinlogo-64.png') }}"
+           alt="" width="32" height="32" class="brand-mark">
+      <span>{{ POOL_NAME }}</span>
+    </a>
     <nav class="topnav">
+      <a href="/">Home</a>
+      <a href="/api/stats">API</a>
       <a href="https://pricoin.org/">pricoin.org →</a>
       <a href="https://explorer.pricoin.org/">Explorer →</a>
     </nav>
-  </header>
-  <main>
-    {% block content %}{% endblock %}
-  </main>
-  <footer class="footer">
-    <p class="mute">Pool fee {{ POOL_FEE }}% · PPLNS · RandomX
-       · <a href="/api/stats">/api/stats</a></p>
-  </footer>
+  </div>
+</header>
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  <div class="container">
+    <span>Pool fee {{ POOL_FEE }}% · PPLNS · RandomX</span>
+    <span><a href="/api/stats">/api/stats</a></span>
+  </div>
+</footer>
+
 </body>
 </html>
