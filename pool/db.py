@@ -72,8 +72,11 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def connect(path: str, *, write: bool = True) -> sqlite3.Connection:
-    """Open a connection. Creates the file + schema on first call."""
-    new = not os.path.exists(path)
+    """Open a connection. Schema is applied on every write-mode open
+    (CREATE TABLE IF NOT EXISTS — cheap when already there); we don't
+    rely on file-existence checks because external readers (e.g. the
+    web UI smoke test or scripts polling the pool) might have created
+    an empty file before the daemon ever opens it."""
     uri = f"file:{path}?mode={'rwc' if write else 'ro'}"
     conn = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -82,8 +85,7 @@ def connect(path: str, *, write: bool = True) -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA busy_timeout = 5000")
-        if new:
-            conn.executescript(SCHEMA)
+        conn.executescript(SCHEMA)
     return conn
 
 
