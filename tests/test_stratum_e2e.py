@@ -313,15 +313,21 @@ async def _run_e2e(rpc, jobs, db_path, pool_port, seed_hash, miner_login):
             # Pool fee is 1% by default; with 50 PRIC subsidy that's 0.5 PRIC.
             assert b["pool_fee_sats"] > 0
             assert b["reward_sats"] > 0
-        # The lone miner should have all the credits (sum of distributable).
-        worker_balance = workers[0]["balance_sats"]
-        # Re-read because credits happened after the workers row was first read.
+        # Phase-5 deferred-credit model: balance_sats stays at 0 until the
+        # block matures (100 confs) and PayoutDaemon's maturity pass moves
+        # the per-block split out of pending_credits. Pre-maturity, the
+        # split lives in pending_credits.
         balance_now = conn.execute("SELECT balance_sats FROM workers WHERE id = ?",
                                    (workers[0]["id"],)).fetchone()["balance_sats"]
-        assert balance_now > 0, "winner should have non-zero balance"
+        assert balance_now == 0, f"balance should be 0 pre-maturity, got {balance_now}"
+        pending_total = conn.execute(
+            "SELECT COALESCE(SUM(amount_sats), 0) AS s FROM pending_credits"
+        ).fetchone()["s"]
         total_distributable = sum(b["reward_sats"] - b["pool_fee_sats"] for b in blocks)
-        assert balance_now == total_distributable, \
-            f"balance {balance_now} != distributable {total_distributable}"
+        assert pending_total == total_distributable, \
+            f"pending {pending_total} != distributable {total_distributable}"
+        for b in blocks:
+            assert b["credited"] == 0, "blocks shouldn't be marked credited yet"
 
 
 # ---------- payout e2e ----------
@@ -426,6 +432,12 @@ def test_e2e_payout(regtest_pricoind, tmp_path):
         bootstrap_template.seed_hash, recipient_stealth,
     ))
 
+    # Mine 100 more blocks so the pool's just-found block reaches coinbase
+    # maturity. The maturity pass inside PayoutDaemon.run_once() will then
+    # promote the pending_credits entry into balance_sats and the payout
+    # batch will go out.
+    rpc.call("generatetoaddress", 100, coinbase_addr)
+
     # Recipient's pre-payout CT balance.
     pre = float(rpc_rcv.call("pricoin_listownct", 0)["total_recovered"])
 
@@ -438,6 +450,7 @@ def test_e2e_payout(regtest_pricoind, tmp_path):
         fee_per_payout_sats=10_000,            # 0.0001 PRIC
     )
     stats = daemon.run_once()
+    assert stats.matured_blocks >= 1, stats
     assert stats.payout_txs == 1, stats
     assert stats.paid_recipients == 1
     assert stats.paid_total_sats > 0

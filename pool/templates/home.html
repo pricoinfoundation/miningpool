@@ -50,13 +50,15 @@
   {% if blocks %}
   <table class="data">
     <thead>
-      <tr><th>Height</th><th>Found</th><th>Reward</th><th>Hash</th></tr>
+      <tr><th>Height</th><th>Found</th><th>Status</th><th>Reward</th><th>Hash</th></tr>
     </thead>
     <tbody>
       {% for b in blocks %}
+      {% set st = fmt_block_status(block_confs.get(b.hash)) %}
       <tr>
         <td>{{ b.height }}</td>
         <td><span class="mute">{{ fmt_age(b.found_at) }}</span></td>
+        <td><span class="status status-{{ st[1] }}">{{ st[0] }}</span></td>
         <td>{{ fmt_pric(b.reward_sats) }} PRIC</td>
         <td class="mono">{{ fmt_short(b.hash) }}</td>
       </tr>

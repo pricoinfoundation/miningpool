@@ -19,27 +19,36 @@ def _seed(db_path, workers):
 
 
 class FakeRPC:
-    """Records calls + returns a canned response. Optionally raises."""
+    """Records calls + returns canned responses for the methods PayoutDaemon
+    uses (walletsendct_multi for payouts, getblock for the maturity pass).
+    Optionally fails walletsendct_multi to exercise the retry path."""
     def __init__(self, *, fail: bool = False):
         self.fail = fail
         self.calls = []
 
     def __call__(self, method, *args):
         self.calls.append((method, args))
-        if self.fail:
-            raise RuntimeError("RPC dead")
-        # Fresh unique txid per call so we don't trip the UNIQUE
-        # constraint on payouts.txid when a single run produces multiple
-        # batches.
-        n_recip = len(args[0]) if args and isinstance(args[0], list) else 0
-        txid = f"{len(self.calls):064x}"
-        return {
-            "txid": txid,
-            "recipients": n_recip,
-            "outputs": n_recip + 1,
-            "total_sent": sum(r["amount"] for r in args[0]) if args else 0,
-            "fee": args[1] if len(args) > 1 else 0,
-        }
+        if method == "getblock":
+            # Whatever block we're asked about, claim it has 100+ confs
+            # so the maturity pass promotes pending_credits to balance.
+            return {"confirmations": 200}
+        if method == "walletsendct_multi":
+            if self.fail:
+                raise RuntimeError("RPC dead")
+            n_recip = len(args[0]) if args and isinstance(args[0], list) else 0
+            # Fresh unique txid per call so we don't trip the UNIQUE
+            # constraint on payouts.txid when a single run produces
+            # multiple batches.
+            send_calls = sum(1 for c in self.calls if c[0] == "walletsendct_multi")
+            txid = f"{send_calls:064x}"
+            return {
+                "txid": txid,
+                "recipients": n_recip,
+                "outputs": n_recip + 1,
+                "total_sent": sum(r["amount"] for r in args[0]) if args else 0,
+                "fee": args[1] if len(args) > 1 else 0,
+            }
+        raise AssertionError(f"unexpected RPC method {method!r}")
 
 
 def test_split_fee_remainder():

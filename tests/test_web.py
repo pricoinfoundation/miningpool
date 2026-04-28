@@ -56,6 +56,10 @@ def web_client(tmp_path, monkeypatch):
     monkeypatch.setenv("POOL_DB", db_path)
     monkeypatch.setenv("POOL_NAME", "TestPool")
     monkeypatch.setenv("POOL_FEE_PCT", "1.5")
+    # Point at a dummy RPC datadir so PricoinRPC's cookie-auth fallback
+    # can't actually connect — _confirmations_for catches the exception
+    # and returns Nones, which renders as "?".
+    monkeypatch.setenv("POOL_DATADIR", str(tmp_path / "fake-pricoin"))
     # Re-import web with the new env in effect.
     import importlib
     import pool.web as pw

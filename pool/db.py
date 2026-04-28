@@ -44,8 +44,22 @@ CREATE TABLE IF NOT EXISTS blocks (
     found_at     INTEGER NOT NULL,
     reward_sats  INTEGER NOT NULL,
     pool_fee_sats INTEGER NOT NULL,
-    accepted     INTEGER NOT NULL DEFAULT 1   -- 0 if orphaned later
+    accepted     INTEGER NOT NULL DEFAULT 1,  -- 0 if orphaned later
+    credited     INTEGER NOT NULL DEFAULT 0   -- 1 once balances are moved out of pending
 );
+
+-- Per-block, per-worker amounts captured from the PPLNS window at the
+-- time the block was found. Stays here until coinbase maturity (100
+-- confs); on maturity we add them to workers.balance_sats and on
+-- orphan we drop them.
+CREATE TABLE IF NOT EXISTS pending_credits (
+    block_height INTEGER NOT NULL REFERENCES blocks(height),
+    worker_id    INTEGER NOT NULL REFERENCES workers(id),
+    amount_sats  INTEGER NOT NULL,
+    PRIMARY KEY (block_height, worker_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pending_block ON pending_credits(block_height);
+CREATE INDEX IF NOT EXISTS idx_pending_worker ON pending_credits(worker_id);
 
 CREATE TABLE IF NOT EXISTS payouts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +85,18 @@ CREATE TABLE IF NOT EXISTS meta (
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Apply forward-only schema migrations idempotently."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(blocks)").fetchall()}
+    if "credited" not in cols:
+        # Existing rows had their balances credited under the old (buggy)
+        # immediate-credit model. Mark them credited=1 so the new
+        # maturity pass doesn't double-count them. New inserts will
+        # explicitly set credited=0 and go through the pending path.
+        conn.execute("ALTER TABLE blocks ADD COLUMN credited INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE blocks SET credited = 1")
+
+
 def connect(path: str, *, write: bool = True) -> sqlite3.Connection:
     """Open a connection. Schema is applied on every write-mode open
     (CREATE TABLE IF NOT EXISTS — cheap when already there); we don't
@@ -86,6 +112,7 @@ def connect(path: str, *, write: bool = True) -> sqlite3.Connection:
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA busy_timeout = 5000")
         conn.executescript(SCHEMA)
+        _migrate(conn)
     return conn
 
 

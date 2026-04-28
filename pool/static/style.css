@@ -152,6 +152,20 @@ table.data tbody td {
 }
 table.data tbody tr:hover td { background: var(--bg-alt); }
 
+/* ---------- Block-status pills ---------- */
+.status {
+  display: inline-block;
+  padding: 2px 9px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.status-ok       { background: #e3f5e0; color: #2a6b1a; }
+.status-maturing { background: var(--accent-s); color: var(--accent-d); }
+.status-orphan   { background: #ffe5e5; color: #aa3333; }
+.status-unknown  { background: var(--pill-bg); color: var(--pill-tx); }
+
 /* ---------- Footer ---------- */
 footer {
   background: var(--bg-alt); border-top: 1px solid var(--border);

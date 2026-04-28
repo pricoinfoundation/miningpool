@@ -29,6 +29,8 @@ SATS_PER_PRIC = 100_000_000
 
 @dataclass
 class PayoutStats:
+    matured_blocks:    int = 0
+    orphaned_blocks:   int = 0
     eligible_workers:  int = 0
     payout_txs:        int = 0
     paid_recipients:   int = 0
@@ -57,16 +59,23 @@ class PayoutDaemon:
         default_min_payout_sats: int,
         batch_size: int = 50,
         fee_per_payout_sats: int = 10_000,   # 0.0001 PRIC
+        maturity_confs: int = 100,           # Bitcoin coinbase rule
     ):
         self._db_path = db_path
         self._rpc_call = rpc_call
         self._default_min = default_min_payout_sats
         self._batch_size = batch_size
         self._fee_per_payout = fee_per_payout_sats
+        self._maturity_confs = maturity_confs
 
     def run_once(self) -> PayoutStats:
         stats = PayoutStats()
         with db.connect(self._db_path) as conn_db:
+            # Step 1: promote any newly-mature pending_credits into worker
+            # balances. Drop credits from blocks that ended up orphaned.
+            stats.matured_blocks, stats.orphaned_blocks = self._mature_blocks(conn_db)
+
+            # Step 2: pay anyone now eligible.
             workers = self._select_eligible(conn_db)
             stats.eligible_workers = len(workers)
             for batch in _chunked(workers, self._batch_size):
@@ -78,6 +87,65 @@ class PayoutDaemon:
                 else:
                     stats.failed_batches    += 1
         return stats
+
+    def _mature_blocks(self, conn_db: sqlite3.Connection) -> tuple[int, int]:
+        """Walk uncredited blocks, ask pricoind for each one's confirmations.
+        Mature ones (>= maturity_confs) → move pending_credits into
+        balance_sats. Orphaned ones (confirmations == -1) → drop pending
+        credits + mark accepted=0. Immature → leave for the next cycle.
+
+        Returns (matured_count, orphaned_count).
+        """
+        rows = conn_db.execute(
+            "SELECT height, hash FROM blocks WHERE credited = 0 AND accepted = 1 "
+            "ORDER BY height"
+        ).fetchall()
+        matured = orphaned = 0
+        for r in rows:
+            try:
+                info = self._rpc_call("getblock", r["hash"], 1)
+            except Exception as e:
+                msg = str(e).lower()
+                if "block not found" in msg or "rpc -5" in msg:
+                    confs = -1   # never landed on chain
+                else:
+                    log.warning("maturity check getblock failed h=%d: %s", r["height"], e)
+                    continue
+            else:
+                confs = int(info.get("confirmations", -1))
+
+            if confs == -1:
+                # Orphaned — drop credits + record permanent rejection.
+                with conn_db:
+                    conn_db.execute("DELETE FROM pending_credits WHERE block_height = ?",
+                                    (r["height"],))
+                    conn_db.execute(
+                        "UPDATE blocks SET accepted = 0, credited = 1 WHERE height = ?",
+                        (r["height"],))
+                log.warning("block h=%d ORPHANED — pending credits dropped", r["height"])
+                orphaned += 1
+                continue
+
+            if confs < self._maturity_confs:
+                continue
+
+            # Mature: move pending_credits into worker balance.
+            credits = conn_db.execute(
+                "SELECT worker_id, amount_sats FROM pending_credits "
+                "WHERE block_height = ?", (r["height"],)
+            ).fetchall()
+            with conn_db:
+                if credits:
+                    conn_db.executemany(
+                        "UPDATE workers SET balance_sats = balance_sats + ? WHERE id = ?",
+                        [(c["amount_sats"], c["worker_id"]) for c in credits],
+                    )
+                conn_db.execute("UPDATE blocks SET credited = 1 WHERE height = ?",
+                                (r["height"],))
+            log.info("block h=%d matured (%d confs) — credited %d worker(s)",
+                     r["height"], confs, len(credits))
+            matured += 1
+        return matured, orphaned
 
     # ---------- internals ----------
 

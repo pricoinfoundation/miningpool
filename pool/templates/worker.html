@@ -17,13 +17,28 @@
     <div class="stat-label">24 h average</div>
   </div>
   <div class="stat">
+    <div class="stat-num">{{ fmt_pric(maturing_sats) }}</div>
+    <div class="stat-label">Maturing (PRIC)</div>
+  </div>
+  <div class="stat">
     <div class="stat-num">{{ fmt_pric(w.balance_sats) }}</div>
-    <div class="stat-label">Pending balance (PRIC)</div>
+    <div class="stat-label">Spendable balance (PRIC)</div>
   </div>
   <div class="stat">
     <div class="stat-num">{{ fmt_pric(w.paid_total_sats) }}</div>
     <div class="stat-label">Paid total (PRIC)</div>
   </div>
+</section>
+
+<section class="card-block">
+  <h2>How payouts work</h2>
+  <p class="mute">
+    When the pool finds a block, your share is recorded as <strong>maturing</strong>.
+    After 100 confirmations (Bitcoin's coinbase-maturity rule, ~4 hours
+    at 150 s spacing), it moves into <strong>spendable balance</strong>. The next
+    payout cycle (every 10 minutes) sends spendable balance ≥ your
+    minimum payout to your stealth address as a confidential transaction.
+  </p>
 </section>
 
 <section class="card-block">

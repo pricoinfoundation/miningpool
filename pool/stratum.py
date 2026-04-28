@@ -347,20 +347,29 @@ class StratumServer:
         block_hash_internal = sha256d(header_blob)
         block_hash_display = block_hash_internal[::-1].hex()
 
-        # PPLNS: split the reward minus pool fee across the last N shares.
+        # PPLNS: capture the per-worker split using the share window AT
+        # THIS MOMENT (the window has likely moved by the time the block
+        # matures, but the credit must reflect the contribution that found
+        # this block). Funds don't move into worker.balance_sats until the
+        # block reaches coinbase maturity — see PayoutDaemon._mature_blocks.
         with db.connect(self._db_path) as conn_db:
             window = pplns.take_window(conn_db, self._pplns_window)
             split, pool_fee = pplns.split_block_reward(
                 window, t.reward_sats, self._pool_fee_pct)
-            conn_db.execute(
-                "INSERT OR REPLACE INTO blocks "
-                "(height, hash, found_at, reward_sats, pool_fee_sats, accepted) "
-                "VALUES (?, ?, ?, ?, ?, 1)",
-                (t.height, block_hash_display, int(time.time()),
-                 t.reward_sats, pool_fee),
-            )
-            if split:
-                db.credit_balance(conn_db, list(split.items()))
+            with conn_db:                              # one transaction
+                conn_db.execute(
+                    "INSERT OR REPLACE INTO blocks "
+                    "(height, hash, found_at, reward_sats, pool_fee_sats, accepted, credited) "
+                    "VALUES (?, ?, ?, ?, ?, 1, 0)",
+                    (t.height, block_hash_display, int(time.time()),
+                     t.reward_sats, pool_fee),
+                )
+                if split:
+                    conn_db.executemany(
+                        "INSERT OR REPLACE INTO pending_credits "
+                        "(block_height, worker_id, amount_sats) VALUES (?, ?, ?)",
+                        [(t.height, wid, sats) for wid, sats in split.items()],
+                    )
 
         log.info("BLOCK ACCEPTED height=%d hash=%s reward=%d_sats fee=%d_sats "
                  "credited_to=%d_workers finder=%d",
