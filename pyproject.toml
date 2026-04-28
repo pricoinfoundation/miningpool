@@ -1,0 +1,19 @@
+[project]
+name = "pricoinpool"
+version = "0.0.1"
+description = "PPLNS mining pool for Pricoin (RandomX, privacy-mandatory)"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "tomli>=2.0; python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pool", "rxshare"]

@@ -1,0 +1,23 @@
+# --- python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# --- C extension build artifacts ---
+rxshare/*.o
+rxshare/librxshare.so
+
+# --- runtime state (created by pool.main / tests) ---
+pool.sqlite
+pool.sqlite-shm
+pool.sqlite-wal
+
+# --- secrets / per-host config ---
+# config.toml.example is committed; real config (with rpcauth/cookie
+# overrides etc.) stays out.
+config.toml

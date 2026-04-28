@@ -1,0 +1,47 @@
+[Unit]
+Description=Pricoin mining pool
+After=network.target pricoind.service
+Wants=pricoind.service
+
+[Service]
+Type=simple
+User=pool
+Group=pool
+WorkingDirectory=/home/pool/pricoinpool
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/pool/pricoinpool/.venv/bin/python -m pool.main \
+  --config /home/pool/pricoinpool/config.toml \
+  --db /var/lib/pricoinpool/pool.sqlite
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Security hardening — the pool needs to:
+#   * read its venv + the config + the rxshare .so
+#   * read/write its sqlite DB under /var/lib/pricoinpool
+#   * talk to localhost pricoind RPC
+#   * accept inbound TCP on the stratum port
+# It needs nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pricoinpool
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+
+# RandomX uses a JIT for FULL_MEM hashing → needs W+X pages, so we
+# cannot set MemoryDenyWriteExecute=true. If you switch to interpreter
+# mode (rxshare flags = "light"), this can be enabled.
+MemoryDenyWriteExecute=false
+
+# Hugepages strongly recommended for FULL_MEM hashing speed; the daemon
+# allocates ~2 GB per dataset (current + pending). Set this on the host:
+#   sudo sysctl -w vm.nr_hugepages=1280
+
+[Install]
+WantedBy=multi-user.target

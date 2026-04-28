@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero-mini">
+  <h1>{{ POOL_NAME }}</h1>
+  <p class="lede">PPLNS Pricoin pool. Mine using your stealth address as the
+     username — payouts arrive directly as confidential outputs in your
+     wallet, no separate registration.</p>
+</section>
+
+<section class="stats-row">
+  <div class="stat">
+    <div class="stat-num">{{ fmt_hashrate(hashrate_60s) }}</div>
+    <div class="stat-label">Pool hashrate (60 s)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ fmt_hashrate(hashrate_24h) }}</div>
+    <div class="stat-label">24-hour average</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ active }}</div>
+    <div class="stat-label">Active miners (5 m)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ n_blocks }}</div>
+    <div class="stat-label">Blocks found</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ fmt_pric(total_paid_sats) }}</div>
+    <div class="stat-label">PRIC paid</div>
+  </div>
+</section>
+
+<section class="card-block">
+  <div class="card-header"><h2>How to mine</h2></div>
+  <ol>
+    <li>Get a Pricoin wallet → run <code>pricoin_getstealthaddress</code>;
+        copy the <code>H6…</code> string.</li>
+    <li>Point your miner at <code>stratum+tcp://pool.pricoin.org:3333</code>
+        with that stealth address as the <code>--user</code>.</li>
+    <li>Watch your worker page (<code>/worker/&lt;your-address&gt;</code>)
+        — payouts are batched in confidential transactions every 10
+        minutes once your pending balance clears the minimum.</li>
+  </ol>
+</section>
+
+<section class="card-block">
+  <div class="card-header"><h2>Latest blocks</h2></div>
+  {% if blocks %}
+  <table class="data">
+    <thead>
+      <tr><th>Height</th><th>Found</th><th>Reward</th><th>Hash</th></tr>
+    </thead>
+    <tbody>
+      {% for b in blocks %}
+      <tr>
+        <td>{{ b.height }}</td>
+        <td><span class="mute">{{ fmt_age(b.found_at) }}</span></td>
+        <td>{{ fmt_pric(b.reward_sats) }} PRIC</td>
+        <td class="mono">{{ fmt_short(b.hash) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="mute">No blocks found yet.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

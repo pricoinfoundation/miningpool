@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %} · {{ fmt_short(w.stealth_address) }}{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <span class="kicker">Worker</span>
+  <h1 class="mono break">{{ w.stealth_address }}</h1>
+</header>
+
+<section class="stats-row">
+  <div class="stat">
+    <div class="stat-num">{{ fmt_hashrate(hashrate_60s) }}</div>
+    <div class="stat-label">Hashrate (60 s)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ fmt_hashrate(hashrate_24h) }}</div>
+    <div class="stat-label">24 h average</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ fmt_pric(w.balance_sats) }}</div>
+    <div class="stat-label">Pending balance (PRIC)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ fmt_pric(w.paid_total_sats) }}</div>
+    <div class="stat-label">Paid total (PRIC)</div>
+  </div>
+</section>
+
+<section class="card-block">
+  <div class="card-header"><h2>Recent payouts</h2></div>
+  {% if payouts %}
+  <table class="data">
+    <thead><tr><th>When</th><th>Amount</th><th>Tx</th></tr></thead>
+    <tbody>
+      {% for p in payouts %}
+      <tr>
+        <td><span class="mute">{{ fmt_age(p.ts) }}</span></td>
+        <td>{{ fmt_pric(p.amount_sats) }} PRIC</td>
+        <td class="mono">
+          <a href="https://explorer.pricoin.org/tx/{{ p.txid }}">{{ fmt_short(p.txid) }}</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="mute">No payouts yet — accrue at least the minimum payout
+     and the next cycle will pick you up.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

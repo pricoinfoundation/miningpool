@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ POOL_NAME }}{% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">{{ POOL_NAME }}</a>
+    <nav class="topnav">
+      <a href="https://pricoin.org/">pricoin.org →</a>
+      <a href="https://explorer.pricoin.org/">Explorer →</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <p class="mute">Pool fee {{ POOL_FEE }}% · PPLNS · RandomX
+       · <a href="/api/stats">/api/stats</a></p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,74 @@
+/* Minimalist mono-leaning style. Match feel of pricoin.org / explorer. */
+:root {
+  --bg: #0e0c14;
+  --fg: #e9e3ef;
+  --mute: #8a839a;
+  --accent: #b88dff;
+  --line: #2a2538;
+  --card: #1a1622;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg); color: var(--fg);
+  line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.break { word-break: break-all; }
+.mute { color: var(--mute); }
+
+main { max-width: 64rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0,0,0,.35);
+}
+.brand { font-weight: 600; font-size: 1.05rem; color: var(--fg); }
+.topnav a { margin-left: 1rem; color: var(--mute); }
+.topnav a:hover { color: var(--accent); }
+
+.hero-mini h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+.lede { color: var(--mute); margin: 0 0 2rem; }
+
+.stats-row {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin: 0 0 2rem;
+}
+.stat {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: .5rem; padding: 1rem 1.25rem;
+}
+.stat-num { font-size: 1.4rem; font-weight: 600; }
+.stat-label { color: var(--mute); font-size: .85rem; margin-top: .25rem; }
+
+.card-block {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: .5rem; padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card-header { display: flex; align-items: baseline; justify-content: space-between;
+  margin: 0 0 .75rem; }
+.card-header h2 { margin: 0; font-size: 1.05rem; }
+
+.page-head { margin: 0 0 1.5rem; }
+.kicker { color: var(--mute); font-size: .8rem; text-transform: uppercase;
+  letter-spacing: .08em; }
+.page-head h1 { font-size: 1.1rem; margin: .25rem 0 0; word-break: break-all; }
+
+table.data { width: 100%; border-collapse: collapse; }
+table.data th, table.data td {
+  border-bottom: 1px solid var(--line);
+  padding: .5rem .25rem; text-align: left;
+}
+table.data th { color: var(--mute); font-weight: 500; font-size: .85rem; }
+
+.footer { color: var(--mute); padding: 1rem 1.5rem 2rem; font-size: .85rem;
+  text-align: center; }
+.footer a { color: var(--mute); }
