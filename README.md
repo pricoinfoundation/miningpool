@@ -1,6 +1,6 @@
 # Pricoin Mining Pool
 
-PPLNS pool for the privacy-mandatory [Pricoin](https://pricoin.org) chain.
+PPLNS pool for the privacy-mandatory [Pricoin](https://pricoin.io) chain.
 
 Miners connect with their **stealth address** as the username; the pool
 mines coinbase rewards to its own transparent P2WPKH address, converts to
