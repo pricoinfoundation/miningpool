@@ -105,6 +105,12 @@ class StratumServer:
         # Monotonic per-conn extranonce. 4 bytes = 4 billion connections
         # before wrap, fine for any plausible pool lifetime.
         self._next_extranonce: int = 1
+        # In-flight _on_client tasks. Drained on close() so any block-
+        # found handler still doing its post-submit DB work (PPLNS split,
+        # pending_credits insert) finishes before the pool exits —
+        # otherwise a clean shutdown could lose the credit allocation
+        # for a block that pricoind has already accepted.
+        self._client_tasks: set[asyncio.Task] = set()
         # Stats for tests/UI:
         self.blocks_found: list[dict] = []
 
@@ -127,6 +133,16 @@ class StratumServer:
         if self._server:
             self._server.close()
             await self._server.wait_closed()
+        # Wait for in-flight connection tasks to finish their handlers.
+        # Bounded so a stuck miner can't block shutdown forever.
+        if self._client_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self._client_tasks, return_exceptions=True),
+                    timeout=10.0)
+            except asyncio.TimeoutError:
+                log.warning("close: %d connection task(s) still in flight after 10 s",
+                            len(self._client_tasks))
 
     @property
     def listen_address(self) -> tuple[str, int] | None:
@@ -144,7 +160,10 @@ class StratumServer:
                 old_t = self._jobs.template
                 old_seed = old_t.seed_hash if old_t else None
                 old_id   = old_t.template_id if old_t else None
-                t = self._jobs.refresh()
+                # JobManager.refresh() is a synchronous getblocktemplate RPC.
+                # Run it in an executor so the event loop stays responsive
+                # while pricoind is busy (e.g. validating a retarget block).
+                t = await loop.run_in_executor(None, self._jobs.refresh)
 
                 # Epoch rotation: pricoind's PoW seed advances every 2048
                 # blocks. Rebuild the rxshare dataset under the new seed.
@@ -166,18 +185,21 @@ class StratumServer:
                         # mode in particular doesn't support swap. Log loudly
                         # and let the operator notice.
                         log.error("seed rotation FAILED (%s) — pool will reject "
-                                  "shares until restarted", e)
+                                  "shares until restarted", e, exc_info=True)
 
                 if old_id is None or t.template_id != old_id:
                     await self._push_job_to_all()
             except Exception as e:
-                log.warning("template refresh failed: %s", e)
+                log.warning("template refresh failed: %s", e, exc_info=True)
             await asyncio.sleep(self._refresh_interval)
 
     async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         peer = writer.get_extra_info("peername")
         log.info("client connected: %s", peer)
         conn: Connection | None = None
+        task = asyncio.current_task()
+        if task is not None:
+            self._client_tasks.add(task)
         try:
             while True:
                 line = await reader.readline()
@@ -201,7 +223,18 @@ class StratumServer:
                     if conn is None:
                         await self._send_error(writer, msg_id, -1, "not authorized")
                         continue
-                    await self._handle_submit(conn, writer, params, msg_id)
+                    try:
+                        await self._handle_submit(conn, writer, params, msg_id)
+                    except Exception as e:
+                        # Don't silently drop the connection on a backend
+                        # hiccup (RPC/DB error during share/block handling);
+                        # surface it to the miner and keep the loop alive.
+                        log.warning("submit handler error session=%s: %s",
+                                    conn.session_id, e, exc_info=True)
+                        try:
+                            await self._send_error(writer, msg_id, -1, "internal error")
+                        except Exception:
+                            pass
                 elif method in ("keepalived", "ping"):
                     await self._send_result(writer, msg_id, {"status": "KEEPALIVED"})
                 else:
@@ -218,6 +251,8 @@ class StratumServer:
                 await writer.wait_closed()
             except Exception:
                 pass
+            if task is not None:
+                self._client_tasks.discard(task)
             log.info("client disconnected: %s", peer)
 
     # ---------- handlers ----------
@@ -327,13 +362,18 @@ class StratumServer:
     async def _on_block_found(self, t, nonce: bytes, header_blob: bytes,
                               block_hex: str, finder_worker_id: int) -> None:
         """Reconstruct + submit the full block, then run PPLNS split if accepted."""
-        # submitblock is synchronous and ~milliseconds on regtest; OK on
-        # the asyncio thread for now. Move to a thread executor in phase 5
-        # if it ever becomes a contention point.
+        # submitblock can briefly block while pricoind validates the new
+        # block (and its successor's retarget); run it in an executor so
+        # the event loop stays responsive for other miners.
+        loop = asyncio.get_running_loop()
         try:
-            result = self._rpc.call("submitblock", block_hex)
+            result = await loop.run_in_executor(
+                None, self._rpc.call, "submitblock", block_hex)
         except RPCError as e:
-            log.warning("submitblock RPC error: %s", e)
+            log.warning("submitblock RPC error: %s", e, exc_info=True)
+            return
+        except Exception as e:
+            log.warning("submitblock raised unexpected: %s", e, exc_info=True)
             return
         # Bitcoin Core convention: null/None = accepted; non-empty string = error code.
         if result not in (None, ""):
@@ -386,12 +426,15 @@ class StratumServer:
 
         # Refresh the template so the next job is on top of our just-mined
         # block; push to all miners so they don't keep hashing a now-stale
-        # template.
+        # template. Run the synchronous getblocktemplate in an executor so
+        # we don't pause every other miner while pricoind catches up after
+        # accepting our block (post-acceptance reorg + chainstate work can
+        # add hundreds of ms here).
         try:
-            self._jobs.refresh()
+            await loop.run_in_executor(None, self._jobs.refresh)
             await self._push_job_to_all()
         except Exception as e:
-            log.warning("post-block refresh failed: %s", e)
+            log.warning("post-block refresh failed: %s", e, exc_info=True)
 
     # ---------- push helpers ----------
 
@@ -402,7 +445,7 @@ class StratumServer:
             try:
                 await self._push_job(c)
             except Exception as e:
-                log.warning("push to session=%s failed: %s", c.session_id, e)
+                log.warning("push to session=%s failed: %s", c.session_id, e, exc_info=True)
 
     async def _push_job(self, conn: Connection) -> None:
         if conn.closed or conn.writer is None:

@@ -66,7 +66,7 @@ async def _payout_loop(daemon: PayoutDaemon, interval: float) -> None:
                     stats.failed_batches,
                 )
         except Exception as e:
-            log.warning("payout cycle error: %s", e)
+            log.warning("payout cycle error: %s", e, exc_info=True)
         await asyncio.sleep(interval)
 
 
